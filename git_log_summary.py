@@ -43,8 +43,9 @@ def main(args: list[str]):
     commits = (parse_commit_log(commit_log) for commit_log in commits_logs)
 
     data = defaultdict(lambda: defaultdict(lambda: {"commits": 0, "changes": 0}))
+    excluded_authors = set(args.excluded_authors)
     for commit in commits:
-        if commit.author in args.excluded_authors:
+        if commit.author in excluded_authors or commit.email in excluded_authors:
             continue
 
         data[commit.date][commit.author]["commits"] += 1
@@ -81,16 +82,19 @@ def chunk_git_log(file_object: TextIO) -> Generator[str, None, None]:
 
 class Commit(NamedTuple):
     author: str
+    email: str
     date: str
     changes: int
 
 
 # Regular expressions to match author, date and changes
-author_re = re.compile(r"Author: (.+) <")
+author_re = re.compile(r"Author: (.+) <(.+)>")
 date_re = re.compile(r"Date:\s+(\d{4}-\d{2})")
 insertions_re = re.compile(r"(\d+) insertions?")
 deletions_re = re.compile(r"(\d+) deletions?")
 first_group = lambda match: next(iter(match.groups()))  # noqa: E731
+first_group = lambda match: match.groups()[0]  # noqa: E731
+second_group = lambda match: match.groups()[1]  # noqa: E731
 
 
 def parse_commit_log(commit_log: str) -> Commit:
@@ -100,10 +104,11 @@ def parse_commit_log(commit_log: str) -> Commit:
     deletions_match = deletions_re.search(commit_log)
 
     author = first_group(author_match)
+    email = second_group(author_match)
     commit_date = first_group(date_match)
     insertions = int(first_group(insertions_match)) if insertions_match else 0
     deletions = int(first_group(deletions_match)) if deletions_match else 0
-    return Commit(author, commit_date, insertions + deletions)
+    return Commit(author, email, commit_date, insertions + deletions)
 
 
 def sort_commits_stats(

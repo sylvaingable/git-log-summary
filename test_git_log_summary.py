@@ -23,13 +23,14 @@ def test_text_summary(mock_stdin, capsys, snapshot):
     assert stdout == snapshot
 
 
-def test_can_exclude_commits_by_author(mock_stdin, capsys):
+@pytest.mark.parametrize("author_filter", ["Alice", "alice@example.com"])
+def test_can_exclude_commits_by_author(mock_stdin, capsys, author_filter):
     """
     Given the git log output of a project with 10 commits from 3 authors.
     When summarizing the git log excluding Alice.
     Then the text summary is correct.
     """
-    main(["--exclude", "Alice"])
+    main(["--exclude", author_filter])
     captured = capsys.readouterr()
     stdout = captured.out.rstrip().splitlines()
     assert all("Alice" not in line for line in stdout)
