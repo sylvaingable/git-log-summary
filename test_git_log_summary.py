@@ -1,39 +1,49 @@
+import runpy
 from io import StringIO
 
 import pytest
 
-from git_log_summary import main
+from git_log_summary import CSV_OUTPUT, TEXT_OUTPUT, summarize_git_log
 
 
 @pytest.fixture
-def mock_stdin(monkeypatch):
-    git_log = StringIO(GIT_LOG_SAMPLE)
-    monkeypatch.setattr("sys.stdin", git_log)
+def git_log():
+    yield StringIO(GIT_LOG_SAMPLE)
 
 
-def test_text_summary(mock_stdin, capsys, snapshot):
+@pytest.mark.parametrize("output_format", [TEXT_OUTPUT, CSV_OUTPUT])
+def test_summarize_git_log(git_log, snapshot, output_format):
     """
     Given the git log output of a project with 10 commits from 3 authors.
     When summarizing the git log using the default options.
     Then the text summary is correct.
     """
-    main([])
-    captured = capsys.readouterr()
-    stdout = [line.split() for line in captured.out.rstrip().splitlines()]
-    assert stdout == snapshot
+    summary = summarize_git_log(git_log, output_format=output_format)
+    assert summary == snapshot
 
 
 @pytest.mark.parametrize("author_filter", ["Alice", "alice@example.com"])
-def test_can_exclude_commits_by_author(mock_stdin, capsys, author_filter):
+def test_can_exclude_commits_by_author(git_log, author_filter):
     """
     Given the git log output of a project with 10 commits from 3 authors.
     When summarizing the git log excluding Alice.
     Then Alice's commits are not included in the summary.
     """
-    main(["--exclude", author_filter])
+    summary = summarize_git_log(git_log, excluded_authors=[author_filter])
+    assert "Alice" not in summary
+
+
+def test_can_execute_as_cli(monkeypatch, capsys, git_log):
+    """
+    Given the git log output of a project with 10 commits from 3 authors.
+    When running the script as a CLI command.
+    Then the output is not empty.
+    """
+    monkeypatch.setattr("sys.argv", ["git_log_summary.py"])
+    monkeypatch.setattr("sys.stdin", git_log)
+    runpy.run_module("git_log_summary", run_name="__main__")
     captured = capsys.readouterr()
-    stdout = captured.out.rstrip().splitlines()
-    assert all("Alice" not in line for line in stdout)
+    assert captured.out != ""
 
 
 GIT_LOG_SAMPLE = """

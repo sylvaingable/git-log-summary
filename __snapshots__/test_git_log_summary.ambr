@@ -1,112 +1,34 @@
 # serializer version: 1
-# name: test_text_summary
-  list([
-    list([
-      'Date:',
-      '2024-03-28',
-    ]),
-    list([
-      'Bob',
-      'commits:',
-      '1',
-      'changes:',
-      '708',
-    ]),
-    list([
-      'Charlie',
-      'commits:',
-      '1',
-      'changes:',
-      '239',
-    ]),
-    list([
-      'Alice',
-      'commits:',
-      '1',
-      'changes:',
-      '683',
-    ]),
-    list([
-      'Total',
-      'commits:',
-      '3',
-      'changes:',
-      '1630',
-    ]),
-    list([
-      'Average',
-      'commits:',
-      '1',
-      'changes:',
-      '543',
-    ]),
-    list([
-    ]),
-    list([
-      'Date:',
-      '2024-03-29',
-    ]),
-    list([
-      'Bob',
-      'commits:',
-      '1',
-      'changes:',
-      '12',
-    ]),
-    list([
-      'Total',
-      'commits:',
-      '1',
-      'changes:',
-      '12',
-    ]),
-    list([
-      'Average',
-      'commits:',
-      '1',
-      'changes:',
-      '12',
-    ]),
-    list([
-    ]),
-    list([
-      'Date:',
-      '2024-04-01',
-    ]),
-    list([
-      'Alice',
-      'commits:',
-      '2',
-      'changes:',
-      '984',
-    ]),
-    list([
-      'Bob',
-      'commits:',
-      '3',
-      'changes:',
-      '171',
-    ]),
-    list([
-      'Charlie',
-      'commits:',
-      '1',
-      'changes:',
-      '202',
-    ]),
-    list([
-      'Total',
-      'commits:',
-      '6',
-      'changes:',
-      '1357',
-    ]),
-    list([
-      'Average',
-      'commits:',
-      '2',
-      'changes:',
-      '452',
-    ]),
-  ])
+# name: test_summarize_git_log[csv]
+  '''
+  Date,Bob commits,Bob changes,Charlie commits,Charlie changes,Alice commits,Alice changes,Total commits,Total changes,Average commits,Average changes
+  2024-03-28,1,708,1,239,1,683,3,1630,1,543
+  2024-03-29,1,12,,,,,1,12,1,12
+  2024-04-01,3,171,1,202,2,984,6,1357,2,452
+  
+  '''
+# ---
+# name: test_summarize_git_log[text]
+  '''
+  Date: 2024-03-28
+    Bob                  commits:    1	changes:    708
+    Charlie              commits:    1	changes:    239
+    Alice                commits:    1	changes:    683
+    Total                commits:    3	changes:   1630
+    Average              commits:    1	changes:    543
+  
+  Date: 2024-03-29
+    Bob                  commits:    1	changes:     12
+    Total                commits:    1	changes:     12
+    Average              commits:    1	changes:     12
+  
+  Date: 2024-04-01
+    Alice                commits:    2	changes:    984
+    Bob                  commits:    3	changes:    171
+    Charlie              commits:    1	changes:    202
+    Total                commits:    6	changes:   1357
+    Average              commits:    2	changes:    452
+  
+  
+  '''
 # ---

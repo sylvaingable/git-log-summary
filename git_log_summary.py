@@ -6,8 +6,9 @@ import re
 import sys
 from collections import defaultdict
 from functools import reduce
+from io import StringIO
 from itertools import chain, cycle, tee
-from typing import Generator, NamedTuple, TextIO
+from typing import Generator, Iterable, NamedTuple, TextIO
 
 CHRONOLOGICAL_ORDERING = "chronological"
 TOP_CHANGES_ORDERING = "top-changes"
@@ -17,33 +18,19 @@ TEXT_OUTPUT = "text"
 CSV_OUTPUT = "csv"
 
 
-def main(args: list[str]):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--ordering",
-        choices=[CHRONOLOGICAL_ORDERING, TOP_CHANGES_ORDERING, TOP_COMMITS_ORDERING],
-        default=CHRONOLOGICAL_ORDERING,
-    )
-    parser.add_argument(
-        "--output-format", choices=[TEXT_OUTPUT, CSV_OUTPUT], default=TEXT_OUTPUT
-    )
-    parser.add_argument(
-        "-x",
-        "--exclude",
-        nargs="?",
-        action="append",
-        type=str,
-        default=[],
-        metavar="author",
-        dest="excluded_authors",
-    )
-    args = parser.parse_args(args)
+def summarize_git_log(
+    git_log: TextIO,
+    excluded_authors: list[str] | None = None,
+    ordering: str = CHRONOLOGICAL_ORDERING,
+    output_format: str = TEXT_OUTPUT,
+) -> str:
+    if excluded_authors is None:
+        excluded_authors = []
 
-    commits_logs = chunk_git_log(sys.stdin)
-    commits = (parse_commit_log(commit_log) for commit_log in commits_logs)
+    commits_logs = _chunk_git_log(git_log)
+    commits = (_parse_commit_log(commit_log) for commit_log in commits_logs)
 
     data = defaultdict(lambda: defaultdict(lambda: {"commits": 0, "changes": 0}))
-    excluded_authors = set(args.excluded_authors)
     for commit in commits:
         if commit.author in excluded_authors or commit.email in excluded_authors:
             continue
@@ -58,12 +45,20 @@ def main(args: list[str]):
         authors["Average"]["commits"] = authors["Total"]["commits"] // authors_count
         authors["Average"]["changes"] = authors["Total"]["changes"] // authors_count
 
-    commits_stats = sort_commits_stats(data, args.ordering)
-    write_to_stdout(commits_stats, args.output_format)
+    commits_stats = _sort_commits_stats(data, ordering=ordering)
+
+    if output_format == TEXT_OUTPUT:
+        output = _to_text(commits_stats)
+    elif output_format == CSV_OUTPUT:
+        output = _to_csv(commits_stats)
+    else:
+        raise ValueError(f"Unknown output format: {output_format}")
+
+    return output
 
 
-def chunk_git_log(file_object: TextIO) -> Generator[str, None, None]:
-    """Chunk a git log by commit."""
+def _chunk_git_log(file_object: TextIO) -> Generator[str, None, None]:
+    """Chunk a git log commit by commit."""
     chunk = []
     iterator = iter(file_object)
     while True:
@@ -98,7 +93,7 @@ first_group = lambda match: match.groups()[0]  # noqa: E731
 second_group = lambda match: match.groups()[1]  # noqa: E731
 
 
-def parse_commit_log(commit_log: str) -> Commit:
+def _parse_commit_log(commit_log: str) -> Commit:
     author_match = author_re.search(commit_log)
     date_match = date_re.search(commit_log)
     insertions_match = insertions_re.search(commit_log)
@@ -112,9 +107,9 @@ def parse_commit_log(commit_log: str) -> Commit:
     return Commit(author, email, commit_date, insertions + deletions)
 
 
-def sort_commits_stats(
-    commits_stats: dict[str, dict[str, dict[str, int]]], ordering: str
-) -> list[str, dict[str, dict[str, int]]]:
+def _sort_commits_stats(
+    commits_stats: dict, ordering: str
+) -> Iterable[tuple[str, dict]]:
     if ordering == CHRONOLOGICAL_ORDERING:
         return sorted(commits_stats.items(), key=lambda t: t[0])
     elif ordering == TOP_CHANGES_ORDERING:
@@ -133,21 +128,21 @@ def sort_commits_stats(
         raise ValueError(f"Unknown ordering: {ordering}")
 
 
-def to_text(
-    file_object: TextIO, commits_stats: list[str, dict[str, dict[str, int]]]
-) -> None:
+def _to_text(commits_stats: Iterable[tuple[str, dict]]) -> str:
+    text_buffer = StringIO()
+
     for date, authors in commits_stats:
-        file_object.write(f"Date: {date}\n")
+        text_buffer.write(f"Date: {date}\n")
         for author, stats in authors.items():
-            file_object.write(
+            text_buffer.write(
                 f'  {author:<20} commits: {stats["commits"]:>4}\tchanges: {stats["changes"]:>6}\n'
             )
-        file_object.write("\n")
+        text_buffer.write("\n")
+
+    return text_buffer.getvalue()
 
 
-def to_csv(
-    file_object: TextIO, commits_stats: list[str, dict[str, dict[str, int]]]
-) -> None:
+def _to_csv(commits_stats: Iterable[tuple[str, dict]]) -> str:
     # Find the longest list of authors
     authors = reduce(
         lambda acc, authors: authors if len(authors) > len(acc) else acc,
@@ -160,9 +155,11 @@ def to_csv(
         f"{author} {col}"
         for author, col in zip(duplicated_authors, cycle(["commits", "changes"]))
     )
+
+    text_buffer = StringIO()
     # Use a dict writer to set empty values for authors that don't have commits on a
     # given date
-    csv_writer = csv.DictWriter(file_object, fieldnames=["Date", *authors_fields])
+    csv_writer = csv.DictWriter(text_buffer, fieldnames=["Date", *authors_fields])
     csv_writer.writeheader()
     for date, authors in commits_stats:
         row = {"Date": date}
@@ -171,15 +168,34 @@ def to_csv(
             row[f"{author} changes"] = stats["changes"]
         csv_writer.writerow(row)
 
-
-def write_to_stdout(
-    commits_stats: list[str, dict[str, dict[str, int]]], output_format: str
-):
-    if output_format == TEXT_OUTPUT:
-        to_text(sys.stdout, commits_stats)
-    elif output_format == CSV_OUTPUT:
-        to_csv(sys.stdout, commits_stats)
+    return text_buffer.getvalue()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--ordering",
+        choices=[CHRONOLOGICAL_ORDERING, TOP_CHANGES_ORDERING, TOP_COMMITS_ORDERING],
+        default=CHRONOLOGICAL_ORDERING,
+        help="sort the output (default: chronological)",
+    )
+    parser.add_argument(
+        "--output-format",
+        choices=[TEXT_OUTPUT, CSV_OUTPUT],
+        default=TEXT_OUTPUT,
+        help="output format (default: text)",
+    )
+    parser.add_argument(
+        "-x",
+        "--exclude",
+        nargs="?",
+        action="append",
+        type=str,
+        default=[],
+        metavar="author",
+        dest="excluded_authors",
+        help="exclude commits by author",
+    )
+    args = parser.parse_args(sys.argv[1:])
+    summary = summarize_git_log(git_log=sys.stdin, **vars(args))
+    sys.stdout.write(summary)
