@@ -30,3 +30,11 @@ options:
   --output-format {text,csv}                        
   -x [author], --exclude [author]
 ```
+
+## Design notes
+
+Even though this is a simple script, it was implemented with the following considerations in mind:
+- It must be kept as a single file so that it can easily be copy/pasted to be used.
+- It should have no dependency except the Python standard library so that it doesn't require a preliminary `pip install` to be run.
+- It should not use any fancy new feature to stay compatible with older versions of Python (it was tested to work with Python 3.6).
+- Even though it would probably not be a problem except for a very large git log, the code processing it uses generators as much as possible for memory efficiency.
