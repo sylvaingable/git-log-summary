@@ -29,28 +29,22 @@ def summarize_git_log(
 
     commits_logs = _chunk_git_log(git_log)
     commits = (_parse_commit_log(commit_log) for commit_log in commits_logs)
+    commits = (
+        c
+        for c in commits
+        if c.author not in excluded_authors and c.email not in excluded_authors
+    )
 
-    data = defaultdict(lambda: defaultdict(lambda: {"commits": 0, "changes": 0}))
-    for commit in commits:
-        if commit.author in excluded_authors or commit.email in excluded_authors:
-            continue
+    summary = defaultdict(lambda: defaultdict(lambda: {"commits": 0, "changes": 0}))
+    summary = reduce(_aggregate_commits_by_date, commits, summary)
+    _add_totals_per_date(summary)
 
-        data[commit.date][commit.author]["commits"] += 1
-        data[commit.date][commit.author]["changes"] += commit.changes
-
-    for authors in data.values():
-        authors_count = len(authors)
-        authors["Total"]["commits"] = sum(a["commits"] for a in authors.values())
-        authors["Total"]["changes"] = sum(a["changes"] for a in authors.values())
-        authors["Average"]["commits"] = authors["Total"]["commits"] // authors_count
-        authors["Average"]["changes"] = authors["Total"]["changes"] // authors_count
-
-    commits_stats = _sort_commits_stats(data, ordering=ordering)
+    summary = _sort_commits_summary(summary, ordering=ordering)
 
     if output_format == TEXT_OUTPUT:
-        output = _to_text(commits_stats)
+        output = _to_text(summary)
     elif output_format == CSV_OUTPUT:
-        output = _to_csv(commits_stats)
+        output = _to_csv(summary)
     else:
         raise ValueError(f"Unknown output format: {output_format}")
 
@@ -107,20 +101,36 @@ def _parse_commit_log(commit_log: str) -> Commit:
     return Commit(author, email, commit_date, insertions + deletions)
 
 
-def _sort_commits_stats(
-    commits_stats: dict, ordering: str
+def _aggregate_commits_by_date(summary: dict, commit: Commit) -> dict:
+    summary[commit.date][commit.author]["commits"] += 1
+    summary[commit.date][commit.author]["changes"] += commit.changes
+    return summary
+
+
+def _add_totals_per_date(summary: dict) -> dict:
+    for authors in summary.values():
+        authors_count = len(authors)
+        authors["Total"]["commits"] = sum(a["commits"] for a in authors.values())
+        authors["Total"]["changes"] = sum(a["changes"] for a in authors.values())
+        authors["Average"]["commits"] = authors["Total"]["commits"] // authors_count
+        authors["Average"]["changes"] = authors["Total"]["changes"] // authors_count
+    return summary
+
+
+def _sort_commits_summary(
+    commits_summary: dict, ordering: str
 ) -> Iterable[tuple[str, dict]]:
     if ordering == CHRONOLOGICAL_ORDERING:
-        return sorted(commits_stats.items(), key=lambda t: t[0])
+        return sorted(commits_summary.items(), key=lambda t: t[0])
     elif ordering == TOP_CHANGES_ORDERING:
         return sorted(
-            commits_stats.items(),
+            commits_summary.items(),
             key=lambda t: t[1]["Average"]["changes"],
             reverse=True,
         )
     elif ordering == TOP_COMMITS_ORDERING:
         return sorted(
-            commits_stats.items(),
+            commits_summary.items(),
             key=lambda t: t[1]["Average"]["commits"],
             reverse=True,
         )
@@ -128,10 +138,10 @@ def _sort_commits_stats(
         raise ValueError(f"Unknown ordering: {ordering}")
 
 
-def _to_text(commits_stats: Iterable[tuple[str, dict]]) -> str:
+def _to_text(commits_summary: Iterable[tuple[str, dict]]) -> str:
     text_buffer = StringIO()
 
-    for date, authors in commits_stats:
+    for date, authors in commits_summary:
         text_buffer.write(f"Date: {date}\n")
         for author, stats in authors.items():
             text_buffer.write(
@@ -142,11 +152,11 @@ def _to_text(commits_stats: Iterable[tuple[str, dict]]) -> str:
     return text_buffer.getvalue()
 
 
-def _to_csv(commits_stats: Iterable[tuple[str, dict]]) -> str:
+def _to_csv(commits_summary: Iterable[tuple[str, dict]]) -> str:
     # Find the longest list of authors
     authors = reduce(
         lambda acc, authors: authors if len(authors) > len(acc) else acc,
-        (authors for _, authors in commits_stats),
+        (authors for _, authors in commits_summary),
         [],
     )
     # Each author requires two columns: one for commits and one for changes
@@ -161,7 +171,7 @@ def _to_csv(commits_stats: Iterable[tuple[str, dict]]) -> str:
     # given date
     csv_writer = csv.DictWriter(text_buffer, fieldnames=["Date", *authors_fields])
     csv_writer.writeheader()
-    for date, authors in commits_stats:
+    for date, authors in commits_summary:
         row = {"Date": date}
         for author, stats in authors.items():
             row[f"{author} commits"] = stats["commits"]
