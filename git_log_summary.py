@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 import csv
 import re
@@ -8,7 +6,7 @@ from collections import defaultdict
 from functools import reduce
 from io import StringIO
 from itertools import chain, cycle, tee
-from typing import Generator, Iterable, NamedTuple, TextIO
+from typing import Dict, Generator, Iterable, List, NamedTuple, Optional, TextIO, Tuple
 
 CHRONOLOGICAL_ORDERING = "chronological"
 TOP_CHANGES_ORDERING = "top-changes"
@@ -20,7 +18,7 @@ CSV_OUTPUT = "csv"
 
 def summarize_git_log(
     git_log: TextIO,
-    excluded_authors: list[str] | None = None,
+    excluded_authors: Optional[List[str]] = None,
     ordering: str = CHRONOLOGICAL_ORDERING,
     output_format: str = TEXT_OUTPUT,
 ) -> str:
@@ -101,13 +99,13 @@ def _parse_commit_log(commit_log: str) -> Commit:
     return Commit(author, email, commit_date, insertions + deletions)
 
 
-def _aggregate_commits_by_date(summary: dict, commit: Commit) -> dict:
+def _aggregate_commits_by_date(summary: Dict, commit: Commit) -> Dict:
     summary[commit.date][commit.author]["commits"] += 1
     summary[commit.date][commit.author]["changes"] += commit.changes
     return summary
 
 
-def _add_totals_per_date(summary: dict) -> dict:
+def _add_totals_per_date(summary: Dict) -> Dict:
     for authors in summary.values():
         authors_count = len(authors)
         authors["Total"]["commits"] = sum(a["commits"] for a in authors.values())
@@ -118,8 +116,8 @@ def _add_totals_per_date(summary: dict) -> dict:
 
 
 def _sort_commits_summary(
-    commits_summary: dict, ordering: str
-) -> Iterable[tuple[str, dict]]:
+    commits_summary: Dict, ordering: str
+) -> Iterable[Tuple[str, Dict]]:
     if ordering == CHRONOLOGICAL_ORDERING:
         return sorted(commits_summary.items(), key=lambda t: t[0])
     elif ordering == TOP_CHANGES_ORDERING:
@@ -138,7 +136,7 @@ def _sort_commits_summary(
         raise ValueError(f"Unknown ordering: {ordering}")
 
 
-def _to_text(commits_summary: Iterable[tuple[str, dict]]) -> str:
+def _to_text(commits_summary: Iterable[Tuple[str, Dict]]) -> str:
     text_buffer = StringIO()
 
     for date, authors in commits_summary:
@@ -152,7 +150,7 @@ def _to_text(commits_summary: Iterable[tuple[str, dict]]) -> str:
     return text_buffer.getvalue()
 
 
-def _to_csv(commits_summary: Iterable[tuple[str, dict]]) -> str:
+def _to_csv(commits_summary: Iterable[Tuple[str, Dict]]) -> str:
     # Find the longest list of authors
     authors = reduce(
         lambda acc, authors: authors if len(authors) > len(acc) else acc,
