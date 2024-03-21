@@ -87,12 +87,13 @@ class Commit(NamedTuple):
     changes: int
 
 
-# Regular expressions to match author, date and changes
+## Regular expressions to match author, date and changes
+# Match the author on name or email
 author_re = re.compile(r"Author: (.+) <(.+)>")
-date_re = re.compile(r"Date:\s+(\d{4}-\d{2})")
+# Match the date in the format YYYY-MM-DD, YYYY-MM or YYYY
+date_re = re.compile(r"Date:\s+(\d{4}(?:-\d{2}(?:-\d{2})?)?)")
 insertions_re = re.compile(r"(\d+) insertions?")
 deletions_re = re.compile(r"(\d+) deletions?")
-first_group = lambda match: next(iter(match.groups()))  # noqa: E731
 first_group = lambda match: match.groups()[0]  # noqa: E731
 second_group = lambda match: match.groups()[1]  # noqa: E731
 
